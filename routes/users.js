@@ -1,57 +1,47 @@
 const express = require('express');
 const router = express.Router();
-const bcrypt = require('bcrypt');
+const passport = require('passport');
 const jwt = require('jsonwebtoken');
 
-const User = require('../model/User');
+const User = require('../model/user');
+const passportConfig = require('../config/passport');
+const passportJWT = passport.authenticate('jwt', { session: false });
 
 
-/* GET users listing. */
-router.get('/signup', async (req, res, next) => {
-  const { email, password } = req.body;
+const getToken = (user) => {
+  return jwt.sign({
+    id: user._id,
+    email: user.email,
+  }, process.env.TOKEN_KEY, { expiresIn: 60 });
+}
+
+router.post('/auth', async (req, res, next) => {
   try {
-    const foundUser = User.find({ email }).exec();
-    if (foundUser) {
-      return res.status(403).json({
-        message: 'Already exists'
-      });
-    }
-    const hash = await bcrypt.hash(password, 10);
-    const user = new User({
-      email,
-      password: hash
-    });
-    const newUser = await user.save();
-    res.status(201).json({
-      message: 'User Created'
-    })
+    const { email, password } = req.body;
+    const user = await User.findOne({ email }).exec();
+
+    if (user) return res.status(401).json({ message: 'Email already exists' });
+
+    const newUser = new User({ email, password });
+    await newUser.save();
+    const token = getToken(newUser);
+    res.status(200).json({ accessToken: token });
   } catch (error) {
-    res.status(500).json({ error: error })
+    res.status(401).json({ error: error })
   }
 });
 
-router.get('/signin', async (req, res, next) => {
-  const { email, password } = req.body;
-  try {
-    const foundUser = await User.findOne({ email }).exec();
-    if (foundUser) {
-      const match = await bcrypt.compare(password, foundUser.password);
-      if (match) {
-        const expireIn = Date.now() + 3600000;
-        const token = await jwt.sign({ email, id: foundUser._id }, 'this is very very secret key', { expiresIn: '1h' });
-        return res.status(201).json({ email, token, expireIn })
-      }
-      return res.status(401).json({ message: 'Authentication Failed' })
-    } else {
-      res.status(401).json({
-        message: 'Authentication Failed'
-      });
-    }
-  } catch (error) {
-    res.status(500).json({
-      error: error
-    })
-  }
+router.post('/signin', passport.authenticate('local', { session: false }), async (req, res, next) => {
+  const token = getToken(req.user);
+  res.status(200).json({ accessToken: token });
 });
+
+router.get('/secret', passportJWT, async (req, res, next) => {
+  res.status(200).json('secret page')
+});
+
+
+
+
 
 module.exports = router;
