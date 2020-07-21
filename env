@@ -1,3 +1,8 @@
-//This should be .end file
-DATABASE_URL =
+# This should be .env file
+
 TOKEN_KEY = 
+DATABASE_URL = 
+GOOGLE_CLIENT_ID = 
+GOOGLE_CLIENT_SECRET = 
+FACEBOOK_APP_ID = 
+FACEBOOK_APP_SECRET = 

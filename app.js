@@ -10,8 +10,7 @@ const usersRouter = require('./routes/users');
 
 const app = express();
 
-mongoose.connect(process.env.DATABASE_URL,
-   { useNewUrlParser: true, useUnifiedTopology: true })
+mongoose.connect(process.env.DATABASE_URL, { useNewUrlParser: true, useUnifiedTopology: true })
    .then(() => console.log('Database Connected'))
    .catch(error => console.log(error));
 

@@ -4,19 +4,33 @@ const bcrypt = require('bcrypt');
 const Schema = mongoose.Schema;
 
 const user = new Schema({
-   email: { type: String, required: true },
-   password: { type: String, required: true }
+   method: [String],
+   local: {
+      email: String,
+      password: String
+   },
+   google: {
+      email: String,
+      id: String
+   },
+   facebook: {
+      id: String,
+      email: String
+   }
 });
 
 
 user.pre('save', async function (next) {
-   this.password = await bcrypt.hash(this.password, 10);
+   if (this.local.password) {
+      this.local.password = await bcrypt.hash(this.local.password, 10);
+      next();
+   }
    next();
 });
 
 
 user.methods.verifyPassword = async function (givenPassword) {
-   return await bcrypt.compare(givenPassword, this.password);
+   return await bcrypt.compare(givenPassword, this.local.password);
 }
 
 module.exports = mongoose.model('User', user);
