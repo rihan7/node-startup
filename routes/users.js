@@ -1,60 +1,44 @@
 const express = require('express');
 const router = express.Router();
-const passport = require('passport');
+const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-
-const User = require('../model/user');
-const passportConfig = require('../config/passport');
-const passportJWT = passport.authenticate('jwt', { session: false });
+const passport = require('passport');
 
 
-const getToken = (user) => {
-  return jwt.sign({
-    id: user._id,
-    email: user.local.email || user.google.email || user.facebook.email,
-  }, process.env.TOKEN_KEY, { expiresIn: 60 });
-}
+const mysqlDB = require('../config/mysql_config')
+const db = mysqlDB();
 
-//sign up with email & password
+//MySQL user schema in Mysql folder
+
 router.post('/auth', async (req, res, next) => {
+  const { email, password } = req.body;
   try {
-    const { email, password } = req.body;
-    let user = await User.findOne({
-      $or: [
-        { 'local.email': email },
-        { 'google.email': email },
-        { 'facebook.email': email },
-      ]
-    }).exec();
-
-    if (user && user.local.email)
-      return res.status(401).json({ message: 'Email already exists' });
-
-    if (user && !user.local.email) {
-      user.method.push('local');
-      user.local = { email, password };
-      await user.save();
-    } else {
-      user = new User({ method: ['local'], local: { email, password } });
-      await user.save();
+    const foundUser = (await db.query(`SELECT * FROM users WHERE email = '${email}'`))[0];
+    if (foundUser) {
+      return res.status(401).json({ message: 'Email already in use' })
     }
-
-    const token = getToken(user);
-    res.status(200).json({ accessToken: token, user });
+    if (!foundUser) {
+      const hash = await bcrypt.hash(password, 10);
+      const { insertId } = await db.query(`INSERT INTO users (email, password) values ('${email}', '${hash}')`);
+      const newUser = await db.query(`SELECT * from users where id = ${insertId}`);
+      const token = getToken(newUser);
+      return res.status(200).json(token);
+    }
+    return res.status(401).json({ message: 'Sign-up failed' })
   } catch (error) {
-    res.status(401).json({ error: error })
+    console.log(error)
   }
 });
 
-router.post('/signin', passport.authenticate('local', { session: false }), async (req, res, next) => {
-  const token = getToken(req.user);
-  res.status(200).json({ accessToken: token });
+router.post('/login', passport.authenticate('local', { session: false }), async (req, res, next) => {
+  const token = getToken(req.user)
+  res.status(200).json(token);
 });
 
-router.get('/secret', passportJWT, async (req, res, next) => {
-  res.status(200).json('secret page')
-});
 
+router.get('/secret', passport.authenticate('jwt', { session: false }), async (req, res, next) => {
+  res.status(200).json('secret page');
+});
 
 router.get('/auth/google',
   passport.authenticate('google', { scope: ['profile', 'email'] }));
@@ -69,8 +53,21 @@ router.get('/auth/facebook', passport.authenticate('facebook'));
 
 router.get('/auth/facebook/redirect', passport.authenticate('facebook', { session: false }), (req, res) => {
   const token = getToken(req.user);
-  res.status(200).json({ accessToken: token }); (token)
+  res.status(200).json({ accessToken: token });
 });
+
+
+
+
+
+
+const getToken = (user) => {
+  return jwt.sign({
+    id: user.id,
+    email: user.email
+    // || user.google.email || user.facebook.email,
+  }, process.env.TOKEN_KEY, { expiresIn: 60 });
+}
 
 
 module.exports = router;
